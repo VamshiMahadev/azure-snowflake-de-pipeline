@@ -1,14 +1,15 @@
 -- =====================================================================
--- 06. CDC AUTOMATION WITH STREAMS & TASKS
+-- 05. CDC AUTOMATION WITH STREAMS & TASKS
 -- =====================================================================
 USE ROLE DE_ETL_ROLE;
+USE WAREHOUSE DE_COMPUTE_WH;
 USE DATABASE OPEN_SOURCE_DB;
 
--- Create Stream on Bronze Table to track CDC changes
+-- 1. Create Stream on Bronze Table to track CDC changes
 CREATE OR REPLACE STREAM BRONZE_RAW.STR_RAW_BREWERIES 
 ON TABLE BRONZE_RAW.RAW_BREWERIES;
 
--- Task 1: Automatically populate Silver Layer when Stream has new data
+-- 2. Task 1 (Root): Automatically populate Silver Layer when Stream has new data
 CREATE OR REPLACE TASK SILVER_STAGING.TASK_PROCESS_SILVER
     WAREHOUSE = DE_COMPUTE_WH
     SCHEDULE = '5 MINUTE'
@@ -32,8 +33,9 @@ SELECT
 FROM OPEN_SOURCE_DB.BRONZE_RAW.STR_RAW_BREWERIES
 WHERE METADATA$ACTION = 'INSERT';
 
--- Task 2: Chain Gold Layer refresh upon completion of Task 1
-CREATE OR REPLACE TASK GOLD_ANALYTICS.TASK_REFRESH_GOLD
+-- 3. Task 2 (Child): Chain Gold Layer refresh upon completion of Task 1
+-- (Both tasks reside in SILVER_STAGING schema so Snowflake permits the predecessor relation)
+CREATE OR REPLACE TASK SILVER_STAGING.TASK_REFRESH_GOLD
     WAREHOUSE = DE_COMPUTE_WH
     AFTER SILVER_STAGING.TASK_PROCESS_SILVER
 AS
@@ -47,6 +49,6 @@ SELECT
 FROM OPEN_SOURCE_DB.SILVER_STAGING.DIM_BREWERIES
 GROUP BY 1, 2, 3;
 
--- Resume Tasks (Tasks are created in a SUSPENDED state by default)
-ALTER TASK GOLD_ANALYTICS.TASK_REFRESH_GOLD RESUME;
+-- 4. Resume Tasks (Child tasks must be resumed BEFORE parent/root tasks)
+ALTER TASK SILVER_STAGING.TASK_REFRESH_GOLD RESUME;
 ALTER TASK SILVER_STAGING.TASK_PROCESS_SILVER RESUME;
