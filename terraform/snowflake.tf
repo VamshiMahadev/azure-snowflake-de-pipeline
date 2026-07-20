@@ -1,12 +1,3 @@
-terraform {
-  required_providers {
-    snowflake = {
-      source  = "Snowflake-Labs/snowflake"
-      version = "~> 0.87.0"
-    }
-  }
-}
-
 provider "snowflake" {
   account  = var.snowflake_account
   username = var.snowflake_user
@@ -14,7 +5,7 @@ provider "snowflake" {
   role     = "ACCOUNTADMIN"
 }
 
-# 1. Execute SQL Scripts in sequential order
+# Execute SQL Scripts in sequential order
 resource "snowflake_unsafe_execute" "rbac_and_infra" {
   execute = file("${path.module}/../snowflake/01_rbac_and_infra.sql")
 }
