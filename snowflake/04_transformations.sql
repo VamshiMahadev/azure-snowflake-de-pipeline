@@ -1,0 +1,49 @@
+-- =====================================================================
+-- 04. SILVER LAYER: STRUCTURAL FLATTENING & CLEANING
+-- =====================================================================
+USE ROLE DE_ETL_ROLE;
+USE DATABASE OPEN_SOURCE_DB;
+USE SCHEMA SILVER_STAGING;
+
+-- Create Flattened View over Bronze Raw payload
+CREATE OR REPLACE VIEW VW_CLEAN_BREWERIES AS
+SELECT
+    RAW_PAYLOAD:id::STRING             AS BREWERY_ID,
+    RAW_PAYLOAD:name::STRING           AS BREWERY_NAME,
+    RAW_PAYLOAD:brewery_type::STRING   AS BREWERY_TYPE,
+    RAW_PAYLOAD:street::STRING         AS STREET_ADDRESS,
+    RAW_PAYLOAD:city::STRING           AS CITY,
+    RAW_PAYLOAD:state_province::STRING AS STATE_PROVINCE,
+    RAW_PAYLOAD:postal_code::STRING    AS POSTAL_CODE,
+    RAW_PAYLOAD:country::STRING        AS COUNTRY,
+    RAW_PAYLOAD:longitude::NUMBER(10,7) AS LONGITUDE,
+    RAW_PAYLOAD:latitude::NUMBER(10,7)  AS LATITUDE,
+    RAW_PAYLOAD:phone::STRING          AS PHONE,
+    RAW_PAYLOAD:website_url::STRING    AS WEBSITE_URL,
+    INGESTION_TIMESTAMP
+FROM OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES
+WHERE RAW_PAYLOAD:id IS NOT NULL;
+
+-- Create Persisted Silver Table
+CREATE TABLE IF NOT EXISTS DIM_BREWERIES LIKE VW_CLEAN_BREWERIES;
+
+-- Insert Data Into Silver Table
+INSERT INTO DIM_BREWERIES
+SELECT * FROM VW_CLEAN_BREWERIES;
+
+
+-- =====================================================================
+-- 05. GOLD LAYER: BUSINESS AGGREGATIONS
+-- =====================================================================
+USE SCHEMA OPEN_SOURCE_DB.GOLD_ANALYTICS;
+
+-- Aggregate: Brewery Count per State & Type
+CREATE OR REPLACE TABLE FACT_BREWERY_SUMMARY_BY_STATE AS
+SELECT
+    COUNTRY,
+    STATE_PROVINCE,
+    BREWERY_TYPE,
+    COUNT(DISTINCT BREWERY_ID) AS TOTAL_BREWERIES,
+    CURRENT_TIMESTAMP()        AS AGGREGATED_AT
+FROM OPEN_SOURCE_DB.SILVER_STAGING.DIM_BREWERIES
+GROUP BY 1, 2, 3;
