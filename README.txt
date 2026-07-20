@@ -360,4 +360,3 @@ FROM OPEN_SOURCE_DB.GOLD_ANALYTICS.FACT_BREWERY_SUMMARY_BY_STATE;
 - End-to-end healthcare complaint and quality management use case simulation.
 - Automated ingestion, transformation, and analytics pipeline.
 
----
