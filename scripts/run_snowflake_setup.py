@@ -6,7 +6,7 @@ SNOWFLAKE_USER = os.getenv("SNOWFLAKE_USER")
 SNOWFLAKE_PASSWORD = os.getenv("SNOWFLAKE_PASSWORD")
 
 AZURE_STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT")
-AZURE_STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY")
+AZURE_SAS_TOKEN = os.getenv("AZURE_SAS_TOKEN")
 
 SQL_FILES = [
     "snowflake/01_rbac_and_infra.sql",
@@ -31,10 +31,12 @@ def run_sql_scripts():
             with open(sql_file, "r") as f:
                 sql_content = f.read()
 
-                # Inject dynamic Azure storage credentials into 02_azure_integration.sql
+                # Inject dynamic Azure storage details into 02_azure_integration.sql
                 if "02_azure_integration.sql" in sql_file:
                     sql_content = sql_content.replace("<STORAGE_ACCOUNT_NAME>", AZURE_STORAGE_ACCOUNT)
-                    sql_content = sql_content.replace("<STORAGE_ACCOUNT_KEY>", AZURE_STORAGE_KEY)
+                    # Clean SAS token if it has a leading '?'
+                    clean_sas = AZURE_SAS_TOKEN.lstrip("?") if AZURE_SAS_TOKEN else ""
+                    sql_content = sql_content.replace("<AZURE_SAS_TOKEN>", clean_sas)
 
                 for cur in conn.execute_string(sql_content):
                     print(f"Executed statement: {cur.query[:60]}...")
