@@ -1,8 +1,7 @@
-# Snowflake provider configuration
+# Snowflake provider dynamically reads secrets passed via environment variables
 provider "snowflake" {
-  organization_name = "TICRBPW"
-  account_name      = "FO21753"
-  user              = var.snowflake_user
-  password          = var.snowflake_password
-  role              = "ACCOUNTADMIN"
+  account  = var.snowflake_account
+  user     = var.snowflake_user
+  password = var.snowflake_password
+  role     = "ACCOUNTADMIN"
 }

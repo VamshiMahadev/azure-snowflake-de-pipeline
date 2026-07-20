@@ -1,7 +1,7 @@
 name: "01 - Azure Infrastructure Pipeline"
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
   push:
     paths:
       - 'terraform/**'
@@ -21,7 +21,7 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
-          terraform_wrapper: false # Prevents stdout debug decoration corruption
+          terraform_wrapper: false
 
       - name: Terraform Init & Apply
         working-directory: ./terraform
@@ -37,6 +37,7 @@ jobs:
             -var="azure_client_id=${{ secrets.AZURE_CLIENT_ID }}" \
             -var="azure_client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
             -var="azure_tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var="resource_group_name=${{ secrets.AZURE_RESOURCE_GROUP || 'azure-de-pipeline-rg' }}" \
             -var="snowflake_account=${{ secrets.SNOWFLAKE_ACCOUNT }}" \
             -var="snowflake_user=${{ secrets.SNOWFLAKE_USER }}" \
             -var="snowflake_password=${{ secrets.SNOWFLAKE_PASSWORD }}"
