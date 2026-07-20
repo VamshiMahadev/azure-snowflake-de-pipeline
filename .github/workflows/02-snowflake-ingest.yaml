@@ -34,11 +34,11 @@ jobs:
 
       - name: Retrieve Storage Account Name and Key
         run: |
-          # Query Azure for storage account name starting with 'azuredeblob' in resource group 'azure-de-project'
-          SA_NAME=$(az storage account list --resource-group "azure-de-project" --query "[?starts_with(name, 'azuredeblob')].name | [0]" -o tsv)
+          # Query Azure for storage account name starting with 'azuredeblob' in resource group 'azure-de-pipeline-rg'
+          SA_NAME=$(az storage account list --resource-group "azure-de-pipeline-rg" --query "[?starts_with(name, 'azuredeblob')].name | [0]" -o tsv)
           
           if [ -z "$SA_NAME" ]; then
-            echo "Error: Storage account not found in Azure Resource Group 'azure-de-project'. Ensure Pipeline 1 was run first."
+            echo "Error: Storage account not found in Azure Resource Group 'azure-de-pipeline-rg'. Ensure Pipeline 1 was run first."
             exit 1
           fi
 
