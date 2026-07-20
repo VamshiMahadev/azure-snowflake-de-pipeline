@@ -1,7 +1,7 @@
 name: "02 - Snowflake DB & Ingestion Pipeline"
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
   push:
     paths:
       - 'snowflake/**'
@@ -32,7 +32,7 @@ jobs:
         with:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
-      - name: Retrieve Storage Account Name and Key
+      - name: Retrieve Storage Account Name, Key & Generate SAS Token
         run: |
           # Query Azure for storage account name starting with 'azuredeblob' in resource group 'azure-de-pipeline-rg'
           SA_NAME=$(az storage account list --resource-group "azure-de-pipeline-rg" --query "[?starts_with(name, 'azuredeblob')].name | [0]" -o tsv)
@@ -43,13 +43,24 @@ jobs:
           fi
 
           # Get primary access key
-          SA_KEY=$(az storage account keys list --account-name "$SA_NAME" --query "[0].value" -o tsv)
+          SA_KEY=$(az storage account keys list --account-name "$SA_NAME" --resource-group "azure-de-pipeline-rg" --query "[0].value" -o tsv)
           CONN_STR="DefaultEndpointsProtocol=https;AccountName=${SA_NAME};AccountKey=${SA_KEY};EndpointSuffix=core.windows.net"
+
+          # Generate 7-day SAS Token for Snowflake External Stage
+          EXPIRY=$(date -u -d "7 days" '+%Y-%m-%dT%H:%MZ')
+          SAS_TOKEN=$(az storage container generate-sas \
+            --account-name "$SA_NAME" \
+            --account-key "$SA_KEY" \
+            --name "raw-data" \
+            --permissions acdlrw \
+            --expiry "$EXPIRY" \
+            -o tsv)
 
           echo "Found Storage Account: $SA_NAME"
 
           echo "AZURE_STORAGE_ACCOUNT=${SA_NAME}" >> $GITHUB_ENV
           echo "AZURE_STORAGE_KEY=${SA_KEY}" >> $GITHUB_ENV
+          echo "AZURE_SAS_TOKEN=${SAS_TOKEN}" >> $GITHUB_ENV
           echo "AZURE_CONN_STR=${CONN_STR}" >> $GITHUB_ENV
 
       - name: Execute Snowflake DB Setup Scripts
@@ -58,14 +69,14 @@ jobs:
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
           AZURE_STORAGE_ACCOUNT: ${{ env.AZURE_STORAGE_ACCOUNT }}
-          AZURE_STORAGE_KEY: ${{ env.AZURE_STORAGE_KEY }}
+          AZURE_SAS_TOKEN: ${{ env.AZURE_SAS_TOKEN }}
         run: |
           python scripts/run_snowflake_setup.py
 
       - name: Execute Data Ingestion & Snowflake Load
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ env.AZURE_CONN_STR }}
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_ACCOUNT: "TICRBPW-FO21753"
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
