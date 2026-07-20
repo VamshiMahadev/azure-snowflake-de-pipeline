@@ -1,0 +1,72 @@
+name: "02 - Snowflake DB & Ingestion Pipeline"
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+  push:
+    paths:
+      - 'snowflake/**'
+      - 'scripts/**'
+    branches:
+      - main
+
+jobs:
+  run_snowflake_and_ingest:
+    name: "Execute Snowflake Setup & Data Ingestion"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install requests azure-storage-blob snowflake-connector-python
+
+      - name: Azure CLI Login & Fetch Storage Credentials
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Retrieve Storage Account Name and Key
+        run: |
+          # Query Azure for storage account name starting with 'azuredeblob' in resource group 'azure-de-project'
+          SA_NAME=$(az storage account list --resource-group "azure-de-project" --query "[?starts_with(name, 'azuredeblob')].name | [0]" -o tsv)
+          
+          if [ -z "$SA_NAME" ]; then
+            echo "Error: Storage account not found in Azure Resource Group 'azure-de-project'. Ensure Pipeline 1 was run first."
+            exit 1
+          fi
+
+          # Get primary access key
+          SA_KEY=$(az storage account keys list --account-name "$SA_NAME" --query "[0].value" -o tsv)
+          CONN_STR="DefaultEndpointsProtocol=https;AccountName=${SA_NAME};AccountKey=${SA_KEY};EndpointSuffix=core.windows.net"
+
+          echo "Found Storage Account: $SA_NAME"
+
+          echo "AZURE_STORAGE_ACCOUNT=${SA_NAME}" >> $GITHUB_ENV
+          echo "AZURE_STORAGE_KEY=${SA_KEY}" >> $GITHUB_ENV
+          echo "AZURE_CONN_STR=${CONN_STR}" >> $GITHUB_ENV
+
+      - name: Execute Snowflake DB Setup Scripts
+        env:
+          SNOWFLAKE_ACCOUNT: "TICRBPW-FO21753"
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          AZURE_STORAGE_ACCOUNT: ${{ env.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_KEY: ${{ env.AZURE_STORAGE_KEY }}
+        run: |
+          python scripts/run_snowflake_setup.py
+
+      - name: Execute Data Ingestion & Snowflake Load
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ env.AZURE_CONN_STR }}
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+        run: |
+          python scripts/fetch_and_load.py
