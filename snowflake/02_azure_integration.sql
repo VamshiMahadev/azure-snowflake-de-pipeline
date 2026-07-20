@@ -15,8 +15,8 @@ CREATE OR REPLACE FILE FORMAT FF_JSON
 CREATE OR REPLACE FILE FORMAT FF_PARQUET
     TYPE = 'PARQUET';
 
--- Create External Stage with dynamic Storage Account Name and Access Key
+-- Create External Stage with dynamic Storage Account Name and SAS Token
 CREATE OR REPLACE STAGE STG_AZURE_RAW_BLOB
     URL = 'azure://<STORAGE_ACCOUNT_NAME>.blob.core.windows.net/raw-data/'
-    CREDENTIALS = (AZURE_KEY = '<STORAGE_ACCOUNT_KEY>')
+    CREDENTIALS = (AZURE_SAS_TOKEN = '?<AZURE_SAS_TOKEN>')
     FILE_FORMAT = FF_JSON;
