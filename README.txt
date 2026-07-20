@@ -1,166 +1,363 @@
-```markdown
 # Azure & Snowflake Medallion Data Engineering Platform
 
-An automated end-to-end cloud data pipeline built with **Terraform (IaC)**, **Azure Blob Storage**, **Snowflake Data Warehouse**, **Python**, and **GitHub Actions**.
+An automated end-to-end cloud data pipeline built using **Terraform (Infrastructure as Code)**, **Azure Blob Storage**, **Snowflake Data Warehouse**, **Python**, and **GitHub Actions**.
 
 ---
 
-## 🏥 Domain & Healthcare Relevance: Quality & Global Complaints Engineering
+## Domain & Healthcare Relevance: Quality & Global Complaints Engineering
 
-This data platform architecture mimics enterprise healthcare and medical device management systems (such as **Fresenius Medical Care**, **TrackWise**, or **GMQ Quality Management Systems**).
+This data platform architecture mimics enterprise healthcare and medical device management systems such as Fresenius Medical Care, TrackWise, and Global Quality Management (GMQ) platforms.
 
-### Healthcare Wing Alignment:
-* **Quality Assurance & Regulatory Compliance (Pharmacovigilance & Device Safety)**
-* **Global Complaints Management**: Processing incoming customer, clinical, and patient incident complaints regarding medical equipment, dialysis machines, or pharmaceuticals.
-* **Auditability & Traceability**: Raw incident payloads land in immutable Azure Blob Storage landing zones, while Snowflake enforces Change Data Capture (CDC) to maintain complete historical lineage required by health authorities (e.g., FDA 21 CFR Part 11, EMA).
+### Healthcare Wing Alignment
+
+- Quality Assurance & Regulatory Compliance (Pharmacovigilance & Device Safety)
+- Global Complaints Management for processing customer, clinical, and patient incident complaints related to medical equipment, dialysis machines, or pharmaceuticals.
+- Auditability & Traceability through immutable raw payload storage in Azure Blob Storage and Change Data Capture (CDC) processing within Snowflake.
+- Designed to align with regulatory requirements such as FDA 21 CFR Part 11 and EMA auditability guidelines.
 
 ---
 
-## 🏗️ Architecture & How It Works
+## Architecture Overview
 
+```text
+                    GitHub Actions CI/CD
+                              |
+               --------------------------------
+               |                              |
+               |                              |
+               ▼                              ▼
+       Pipeline 01                       Pipeline 02
+      (Azure Infra)               (Snowflake & Ingestion)
+               |                              |
+        Terraform Deploy                Python Ingestion
+               |                       + SQL Automation
+               |                       + CDC Processing
+               |                              |
+               ▼                              ▼
+      Azure Resource Group              Open REST APIs
+               |                              |
+               ▼                              |
+       Azure Blob Storage <--------------------
+         Container: raw-data
+               |
+               | (External Stage + SAS Token)
+               |
+               ▼
+     ------------------------------------------------
+                    Snowflake Medallion Layer
+     ------------------------------------------------
 
+                    BRONZE_RAW
+                  RAW_BREWERIES
+                    (VARIANT)
+
+                          |
+                     CDC STREAM
+                          |
+                          ▼
+
+                  SILVER_STAGING
+                  DIM_BREWERIES
+                 (Relational Model)
+
+                          |
+                     CHAINED TASK
+                          |
+                          ▼
+
+                  GOLD_ANALYTICS
+         FACT_BREWERY_SUMMARY_BY_STATE
+
+     ------------------------------------------------
 ```
 
-┌────────────────────────────────────────────────────────┐
-│             GitHub Actions CI/CD Orchestration          │
-└───────────┬────────────────────────────────┬───────────┘
-│                                │
-▼                                ▼
-┌───────────────────────┐        ┌───────────────────────┐
-│ Pipeline 01 (Azure)   │        │ Pipeline 02 (Snowflake)│
-│ Terraform provisions  │        │ Python Ingestion      │
-│ Azure Resource Group  │        │ + Multi-Layer DDL     │
-│ & Blob Storage        │        │ + Stream/Task CDC     │
-└───────────┬───────────┘        └───────────┬───────────┘
-│                                │
-▼                                ▼
-┌───────────────────────┐        ┌───────────────────────┐
-│ Azure Blob Storage    │<───────┤ Open REST API /       │
-│ Container: 'raw-data' │ (Push) │ Ingestion Script      │
-└───────────┬───────────┘        └───────────────────────┘
-│
-│ (External Stage / SAS Token)
-▼
-┌────────────────────────────────────────────────────────┐
-│              Snowflake Medallion Architecture           │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ BRONZE_RAW: RAW_BREWERIES / VARIANT JSON Payload  │  │
-│  └────────────────────────┬─────────────────────────┘  │
-│                           │ (CDC Stream)               │
-│  ┌────────────────────────▼─────────────────────────┐  │
-│  │ SILVER_STAGING: DIM_BREWERIES (Parsed Relational)│  │
-│  └────────────────────────┬─────────────────────────┘  │
-│                           │ (Chained Task)             │
-│  ┌────────────────────────▼─────────────────────────┐  │
-│  │ GOLD_ANALYTICS: FACT_BREWERY_SUMMARY_BY_STATE    │  │
-│  └──────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────┘
-
-```
-
 ---
 
-## 🛠️ Repository File Structure
+## Repository Structure
 
 ```text
 .
 ├── .github/
 │   └── workflows/
-│       ├── 01-azure-infra.yaml        # Infrastructure as Code deployment
-│       └── 02-snowflake-ingest.yaml   # Database DDL & Data Ingestion execution
+│       ├── 01-azure-infra.yaml
+│       └── 02-snowflake-ingest.yaml
+│
 ├── scripts/
-│   ├── fetch_and_load.py           # Ingestion engine (API -> Azure Blob -> Snowflake)
-│   └── run_snowflake_setup.py      # Multi-statement SQL setup executor
+│   ├── fetch_and_load.py
+│   └── run_snowflake_setup.py
+│
 ├── snowflake/
-│   ├── 01_rbac_and_infra.sql       # Warehouse, Roles, Databases, and Schemas
-│   ├── 02_azure_integration.sql    # Stage and File Formats with SAS Tokens
-│   ├── 03_bronze_ingestion.sql     # Bronze Landing & External Tables
-│   ├── 04_transformations.sql      # Silver & Gold transformations
-│   └── 05_cdc_automation.sql       # CDC Streams & Scheduled Task DAG
+│   ├── 01_rbac_and_infra.sql
+│   ├── 02_azure_integration.sql
+│   ├── 03_bronze_ingestion.sql
+│   ├── 04_transformations.sql
+│   └── 05_cdc_automation.sql
+│
 └── terraform/
-    ├── main.tf                     # Azure Provider & Storage Account module
-    ├── snowflake.tf                # Snowflake provider declaration
-    └── variables.tf                # Input variable declarations
-
+    ├── main.tf
+    ├── snowflake.tf
+    └── variables.tf
 ```
 
----
+### Description
 
-## 🔐 Required GitHub Secrets Setup
-
-Navigate to your GitHub Repository: **Settings > Secrets and variables > Actions > New repository secret**.
-
-Add the following 8 secrets:
-
-| Secret Name | Description | Example / Value |
-| --- | --- | --- |
-| `AZURE_CLIENT_ID` | Azure App Service Principal App ID | `c0739d8d-xxxx-xxxx-xxxx-xxxx` |
-| `AZURE_CLIENT_SECRET` | Azure Service Principal Client Secret | `0FL8Q~...` |
-| `AZURE_TENANT_ID` | Azure Active Directory Tenant ID | `b1362067-xxxx-xxxx-xxxx-xxxx` |
-| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID | `62ae708f-xxxx-xxxx-xxxx-xxxx` |
-| `AZURE_RESOURCE_GROUP` | (Optional) Azure Resource Group Name | `azure-de-pipeline-rg` |
-| `SNOWFLAKE_ACCOUNT` | Account Identifier (`ORG-ACCOUNT`) | `TICRBPW-FO21753` |
-| `SNOWFLAKE_USER` | Admin User | `SUPERMAN` |
-| `SNOWFLAKE_PASSWORD` | Account Password | `YourPassword123!` |
+| File | Purpose |
+|------|---------|
+| `01-azure-infra.yaml` | Deploys Azure infrastructure using Terraform |
+| `02-snowflake-ingest.yaml` | Executes Snowflake setup and ingestion pipelines |
+| `fetch_and_load.py` | Extracts API data and loads it into Azure Blob Storage and Snowflake |
+| `run_snowflake_setup.py` | Executes multiple Snowflake SQL scripts sequentially |
+| `01_rbac_and_infra.sql` | Creates roles, warehouses, databases, and schemas |
+| `02_azure_integration.sql` | Creates Azure integrations, stages, and file formats |
+| `03_bronze_ingestion.sql` | Creates Bronze ingestion objects and external tables |
+| `04_transformations.sql` | Creates Silver and Gold transformation logic |
+| `05_cdc_automation.sql` | Creates Streams, Tasks, and CDC automation pipelines |
+| `main.tf` | Defines Azure infrastructure resources |
+| `snowflake.tf` | Defines Snowflake provider configuration |
+| `variables.tf` | Stores Terraform input variables |
 
 ---
 
-## 🚀 Execution & Setup Guide
+## Required GitHub Secrets
 
-### Step 1: Clone Repository & Push to Private GitHub Repo
+Navigate to:
 
-```powershell
-git clone [https://github.com/](https://github.com/)<YOUR_USERNAME>/azure-snowflake-de-pipeline.git
+```text
+Repository
+    |
+    └── Settings
+          |
+          └── Secrets and Variables
+                 |
+                 └── Actions
+                        |
+                        └── New Repository Secret
+```
+
+Add the following secrets.
+
+| Secret Name | Description |
+|------------|------------|
+| `AZURE_CLIENT_ID` | Azure Service Principal Application ID |
+| `AZURE_CLIENT_SECRET` | Azure Service Principal Client Secret |
+| `AZURE_TENANT_ID` | Microsoft Entra Tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID |
+| `AZURE_RESOURCE_GROUP` | Resource Group Name |
+| `AZURE_LOCATION` | Deployment Region (e.g., `centralindia`) |
+| `SNOWFLAKE_ACCOUNT` | Snowflake Account Identifier |
+| `SNOWFLAKE_USER` | Snowflake Username |
+| `SNOWFLAKE_PASSWORD` | Snowflake Password |
+
+### Example
+
+| Secret | Example Value |
+|--------|--------------|
+| `AZURE_CLIENT_ID` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `AZURE_CLIENT_SECRET` | `0FL8Q~xxxxxxxxxxxxxxxxx` |
+| `AZURE_TENANT_ID` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `AZURE_SUBSCRIPTION_ID` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `AZURE_RESOURCE_GROUP` | `azure-de-pipeline-rg` |
+| `AZURE_LOCATION` | `centralindia` |
+| `SNOWFLAKE_ACCOUNT` | `ORG-ACCOUNT` |
+| `SNOWFLAKE_USER` | `SUPERMAN` |
+| `SNOWFLAKE_PASSWORD` | `********` |
+
+---
+
+## Execution Guide
+
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/<YOUR_USERNAME>/azure-snowflake-de-pipeline.git
+
 cd azure-snowflake-de-pipeline
 
-# Configure local git
 git branch -M main
+
 git add .
+
 git commit -m "feat: setup azure and snowflake pipeline"
+
 git push -u origin main
-
 ```
-
-### Step 2: Run Infrastructure Pipeline (`01-azure-infra.yaml`)
-
-1. Open your GitHub Repository in your browser.
-2. Go to the **Actions** tab.
-3. Select **`01 - Azure Infrastructure Pipeline`** on the left menu.
-4. Click **Run workflow** $\rightarrow$ **Run workflow**.
-
-*Result*: Provisions the Azure Resource Group, Storage Account, and `raw-data` Blob container via Terraform.
-
-### Step 3: Run Snowflake Setup & Ingestion (`02-snowflake-ingest.yaml`)
-
-1. Select **`02 - Snowflake DB & Ingestion Pipeline`** on the left menu.
-2. Click **Run workflow** $\rightarrow$ **Run workflow**.
-
-*Result*:
-
-* Dynamically fetches the newly created Azure Blob name and key using Azure CLI.
-* Generates a 7-day secure SAS token for Snowflake.
-* Builds the Medallion Database, Schemas, Stages, and Tasks in Snowflake.
-* Ingests open API data into Azure Blob Storage and executes `COPY INTO` Bronze.
-* CDC Tasks run automatically to process Silver and Gold analytics layers.
 
 ---
 
-## 🧪 Pipeline Validation (In Snowflake)
+### Step 2: Deploy Azure Infrastructure
 
-Run this verification query in Snowflake Worksheets using `DE_ETL_ROLE`:
+Open GitHub and navigate to:
+
+```text
+Repository
+    |
+    └── Actions
+            |
+            └── 01 - Azure Infrastructure Pipeline
+                        |
+                        └── Run Workflow
+```
+
+#### Pipeline Tasks
+
+- Logs into Azure.
+- Deploys the Resource Group.
+- Creates the Storage Account.
+- Creates the `raw-data` Blob Container.
+- Generates Terraform outputs for subsequent pipelines.
+
+#### Resources Created
+
+```text
+Azure Subscription
+        |
+        ▼
+ Resource Group
+        |
+        ▼
+ Storage Account
+        |
+        ▼
+   Blob Storage
+        |
+        ▼
+    raw-data
+```
+
+---
+
+### Step 3: Execute Snowflake Setup & Data Ingestion
+
+Navigate to:
+
+```text
+Repository
+    |
+    └── Actions
+            |
+            └── 02 - Snowflake DB & Ingestion Pipeline
+                        |
+                        └── Run Workflow
+```
+
+#### Pipeline Tasks
+
+- Retrieves Storage Account details using Azure CLI.
+- Generates a secure 7-day SAS Token.
+- Creates Snowflake databases and schemas.
+- Creates Storage Integrations, Stages, and File Formats.
+- Creates Bronze, Silver, and Gold layers.
+- Creates CDC Streams and Tasks.
+- Executes Python ingestion scripts.
+- Loads API data into Azure Blob Storage.
+- Executes `COPY INTO` commands for Bronze ingestion.
+- Processes downstream CDC transformations automatically.
+
+---
+
+## End-to-End Workflow
+
+```text
+            Open REST APIs
+                    |
+                    ▼
+            Python Extraction
+                    |
+                    ▼
+           Azure Blob Storage
+                    |
+                    ▼
+              External Stage
+                    |
+                    ▼
+                 Bronze
+             RAW_BREWERIES
+                    |
+                  STREAM
+                    |
+                    ▼
+                 Silver
+            DIM_BREWERIES
+                    |
+                   TASK
+                    |
+                    ▼
+                  Gold
+     FACT_BREWERY_SUMMARY_BY_STATE
+                    |
+                    ▼
+              Analytical Queries
+```
+
+---
+
+## Pipeline Validation
+
+Execute the following query in Snowflake.
 
 ```sql
 USE ROLE DE_ETL_ROLE;
 USE WAREHOUSE DE_COMPUTE_WH;
 
-SELECT 'BRONZE' AS LAYER, COUNT(*) AS ROW_COUNT FROM OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES
+SELECT
+    'BRONZE' AS LAYER,
+    COUNT(*) AS ROW_COUNT
+FROM OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES
+
 UNION ALL
-SELECT 'SILVER' AS LAYER, COUNT(*) AS ROW_COUNT FROM OPEN_SOURCE_DB.SILVER_STAGING.DIM_BREWERIES
+
+SELECT
+    'SILVER' AS LAYER,
+    COUNT(*) AS ROW_COUNT
+FROM OPEN_SOURCE_DB.SILVER_STAGING.DIM_BREWERIES
+
 UNION ALL
-SELECT 'GOLD' AS LAYER, COUNT(*) AS ROW_COUNT FROM OPEN_SOURCE_DB.GOLD_ANALYTICS.FACT_BREWERY_SUMMARY_BY_STATE;
 
+SELECT
+    'GOLD' AS LAYER,
+    COUNT(*) AS ROW_COUNT
+FROM OPEN_SOURCE_DB.GOLD_ANALYTICS.FACT_BREWERY_SUMMARY_BY_STATE;
 ```
 
+### Expected Output
+
+```text
++---------+------------+
+| LAYER   | ROW_COUNT  |
++---------+------------+
+| BRONZE  |    XXX     |
+| SILVER  |    XXX     |
+| GOLD    |    XXX     |
++---------+------------+
 ```
 
-```
+---
+
+## Technologies Used
+
+- Azure Blob Storage
+- Microsoft Entra ID
+- Terraform (Infrastructure as Code)
+- Snowflake Data Warehouse
+- Snowflake Streams & Tasks
+- Python
+- GitHub Actions
+- REST APIs
+- SQL
+- CDC (Change Data Capture)
+- Medallion Architecture (Bronze → Silver → Gold)
+
+---
+
+## Features
+
+- Fully automated Infrastructure as Code deployment.
+- CI/CD-driven Azure and Snowflake provisioning.
+- Secure secret management through GitHub Actions.
+- Medallion architecture implementation.
+- Change Data Capture (CDC) automation using Snowflake Streams and Tasks.
+- External Stage integration between Azure Blob Storage and Snowflake.
+- End-to-end healthcare complaint and quality management use case simulation.
+- Automated ingestion, transformation, and analytics pipeline.
+
+---

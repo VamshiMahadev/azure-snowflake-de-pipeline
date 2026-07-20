@@ -1,13 +1,13 @@
 name: "02 - Snowflake DB & Ingestion Pipeline"
 
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - 'snowflake/**'
-      - 'scripts/**'
-    branches:
-      - main
+  workflow_dispatch: # Keeps manual trigger active
+  # push:             # <--- Comment out or remove these lines
+  #   paths:
+  #     - 'snowflake/**'
+  #     - 'scripts/**'
+  #   branches:
+  #     - main
 
 jobs:
   run_snowflake_and_ingest:
