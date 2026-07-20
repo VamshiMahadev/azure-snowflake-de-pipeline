@@ -1,35 +1,13 @@
 -- =====================================================================
--- 03. BRONZE LAYER: RAW TABLE & EXTERNAL TABLE CREATION
+-- 03. BRONZE LAYER: RAW TABLE CREATION
 -- =====================================================================
 USE ROLE DE_ETL_ROLE;
 USE DATABASE OPEN_SOURCE_DB;
 USE SCHEMA BRONZE_RAW;
 
--- Option A: Internal Raw Ingestion Table (Updated via COPY INTO or Python)
+-- Internal Raw Ingestion Table
 CREATE TABLE IF NOT EXISTS RAW_BREWERIES (
     RAW_PAYLOAD VARIANT,
     FILE_NAME STRING,
     INGESTION_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
-
--- Option B: External Table (Querying Blob Storage Directly)
-CREATE OR REPLACE EXTERNAL TABLE EXT_RAW_BREWERIES (
-    LOCATION_ID STRING AS (VALUE:id::STRING),
-    NAME STRING AS (VALUE:name::STRING),
-    BREWERY_TYPE STRING AS (VALUE:brewery_type::STRING),
-    CITY STRING AS (VALUE:city::STRING),
-    STATE STRING AS (VALUE:state::STRING),
-    PAYLOAD VARIANT AS VALUE
-)
-WITH LOCATION = @STG_AZURE_RAW_BLOB
-AUTO_REFRESH = FALSE
-FILE_FORMAT = (TYPE = 'JSON');
-
--- Test load query from Stage into Raw Ingestion Table
-COPY INTO RAW_BREWERIES (RAW_PAYLOAD, FILE_NAME)
-FROM (
-    SELECT $1, METADATA$FILENAME
-    FROM @STG_AZURE_RAW_BLOB/breweries/
-)
-FILE_FORMAT = (TYPE = 'JSON')
-ON_ERROR = 'CONTINUE';

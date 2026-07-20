@@ -51,15 +51,7 @@ jobs:
             -var="snowflake_user=${{ secrets.SNOWFLAKE_USER }}" \
             -var="snowflake_password=${{ secrets.SNOWFLAKE_PASSWORD }}"
 
-      - name: Execute Snowflake DB Setup Scripts
-        env:
-          SNOWFLAKE_ACCOUNT: "TICRBPW-FO21753"
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-        run: |
-          python scripts/run_snowflake_setup.py
-
-      - name: Get Azure Connection String
+      - name: Get Azure Storage Outputs
         id: azure_keys
         working-directory: ./terraform
         env:
@@ -71,7 +63,20 @@ jobs:
           SA_NAME=$(terraform output -raw storage_account_name)
           SA_KEY=$(terraform output -raw storage_account_key)
           CONN_STR="DefaultEndpointsProtocol=https;AccountName=${SA_NAME};AccountKey=${SA_KEY};EndpointSuffix=core.windows.net"
+          
+          echo "AZURE_STORAGE_ACCOUNT=${SA_NAME}" >> $GITHUB_ENV
+          echo "AZURE_STORAGE_KEY=${SA_KEY}" >> $GITHUB_ENV
           echo "AZURE_CONN_STR=${CONN_STR}" >> $GITHUB_ENV
+
+      - name: Execute Snowflake DB Setup Scripts
+        env:
+          SNOWFLAKE_ACCOUNT: "TICRBPW-FO21753"
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          AZURE_STORAGE_ACCOUNT: ${{ env.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_KEY: ${{ env.AZURE_STORAGE_KEY }}
+        run: |
+          python scripts/run_snowflake_setup.py
 
       - name: Execute Data Ingestion & Snowflake Load
         env:
