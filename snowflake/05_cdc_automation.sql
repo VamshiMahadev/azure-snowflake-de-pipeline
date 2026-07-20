@@ -12,29 +12,29 @@ ON TABLE BRONZE_RAW.RAW_BREWERIES;
 -- 2. Task 1 (Root): Automatically populate Silver Layer when Stream has new data
 CREATE OR REPLACE TASK SILVER_STAGING.TASK_PROCESS_SILVER
     WAREHOUSE = DE_COMPUTE_WH
-    SCHEDULE = '5 MINUTE'
+    SCHEDULE = 'USING CRON 0 0 1 1 * UTC'
     WHEN SYSTEM$STREAM_HAS_DATA('OPEN_SOURCE_DB.BRONZE_RAW.STR_RAW_BREWERIES')
 AS
 INSERT INTO OPEN_SOURCE_DB.SILVER_STAGING.DIM_BREWERIES
 SELECT
-    RAW_PAYLOAD:id::STRING,
-    RAW_PAYLOAD:name::STRING,
-    RAW_PAYLOAD:brewery_type::STRING,
-    RAW_PAYLOAD:street::STRING,
-    RAW_PAYLOAD:city::STRING,
-    RAW_PAYLOAD:state_province::STRING,
-    RAW_PAYLOAD:postal_code::STRING,
-    RAW_PAYLOAD:country::STRING,
-    RAW_PAYLOAD:longitude::NUMBER(10,7),
-    RAW_PAYLOAD:latitude::NUMBER(10,7),
-    RAW_PAYLOAD:phone::STRING,
-    RAW_PAYLOAD:website_url::STRING,
-    INGESTION_TIMESTAMP
-FROM OPEN_SOURCE_DB.BRONZE_RAW.STR_RAW_BREWERIES
-WHERE METADATA$ACTION = 'INSERT';
+    COALESCE(f.value:id::STRING, s.RAW_PAYLOAD:id::STRING),
+    COALESCE(f.value:name::STRING, s.RAW_PAYLOAD:name::STRING),
+    COALESCE(f.value:brewery_type::STRING, s.RAW_PAYLOAD:brewery_type::STRING),
+    COALESCE(f.value:street::STRING, s.RAW_PAYLOAD:street::STRING),
+    COALESCE(f.value:city::STRING, s.RAW_PAYLOAD:city::STRING),
+    COALESCE(f.value:state_province::STRING, s.RAW_PAYLOAD:state_province::STRING),
+    COALESCE(f.value:postal_code::STRING, s.RAW_PAYLOAD:postal_code::STRING),
+    COALESCE(f.value:country::STRING, s.RAW_PAYLOAD:country::STRING),
+    COALESCE(f.value:longitude::NUMBER(10,7), s.RAW_PAYLOAD:longitude::NUMBER(10,7)),
+    COALESCE(f.value:latitude::NUMBER(10,7), s.RAW_PAYLOAD:latitude::NUMBER(10,7)),
+    COALESCE(f.value:phone::STRING, s.RAW_PAYLOAD:phone::STRING),
+    COALESCE(f.value:website_url::STRING, s.RAW_PAYLOAD:website_url::STRING),
+    s.INGESTION_TIMESTAMP
+FROM OPEN_SOURCE_DB.BRONZE_RAW.STR_RAW_BREWERIES s,
+LATERAL FLATTEN(input => s.RAW_PAYLOAD, outer => true) f
+WHERE s.METADATA$ACTION = 'INSERT';
 
 -- 3. Task 2 (Child): Chain Gold Layer refresh upon completion of Task 1
--- (Both tasks reside in SILVER_STAGING schema so Snowflake permits the predecessor relation)
 CREATE OR REPLACE TASK SILVER_STAGING.TASK_REFRESH_GOLD
     WAREHOUSE = DE_COMPUTE_WH
     AFTER SILVER_STAGING.TASK_PROCESS_SILVER
@@ -49,6 +49,6 @@ SELECT
 FROM OPEN_SOURCE_DB.SILVER_STAGING.DIM_BREWERIES
 GROUP BY 1, 2, 3;
 
--- 4. Resume Tasks (Child tasks must be resumed BEFORE parent/root tasks)
+-- 4. Resume Tasks
 ALTER TASK SILVER_STAGING.TASK_REFRESH_GOLD RESUME;
 ALTER TASK SILVER_STAGING.TASK_PROCESS_SILVER RESUME;

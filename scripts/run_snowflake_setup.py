@@ -1,50 +1,67 @@
 import os
+import requests
+import json
+from datetime import datetime
+from azure.storage.blob import BlobServiceClient
 import snowflake.connector
+
+# Environment Variables
+AZURE_CONN_STR = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+CONTAINER_NAME = "raw-data"
 
 SNOWFLAKE_ACCOUNT = os.getenv("SNOWFLAKE_ACCOUNT")
 SNOWFLAKE_USER = os.getenv("SNOWFLAKE_USER")
 SNOWFLAKE_PASSWORD = os.getenv("SNOWFLAKE_PASSWORD")
 
-AZURE_STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT")
-AZURE_SAS_TOKEN = os.getenv("AZURE_SAS_TOKEN")
+def fetch_open_source_data():
+    """Fetch public data from Open Brewery API"""
+    url = "https://api.openbrewerydb.org/v1/breweries?per_page=50"
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
 
-SQL_FILES = [
-    "snowflake/01_rbac_and_infra.sql",
-    "snowflake/02_azure_integration.sql",
-    "snowflake/03_bronze_ingestion.sql",
-    "snowflake/04_transformations.sql",
-    "snowflake/05_cdc_automation.sql"
-]
+def upload_to_azure_blob(data):
+    """Upload raw JSON payload to Azure Blob Storage"""
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H%M%S")
+    blob_name = f"breweries/load_date={timestamp}/data.json"
+    
+    blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONN_STR)
+    blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=blob_name)
+    
+    json_bytes = json.dumps(data).encode('utf-8')
+    blob_client.upload_blob(json_bytes, overwrite=True)
+    print(f"Successfully uploaded raw data to Azure Blob: {blob_name}")
+    return blob_name
 
-def run_sql_scripts():
-    print("Connecting to Snowflake...")
+def copy_into_snowflake(blob_name):
+    """Run COPY INTO command in Snowflake Bronze schema from Azure Stage"""
+    print("Connecting to Snowflake for COPY INTO execution...")
     conn = snowflake.connector.connect(
         user=SNOWFLAKE_USER,
         password=SNOWFLAKE_PASSWORD,
         account=SNOWFLAKE_ACCOUNT,
-        role="ACCOUNTADMIN"
+        warehouse="DE_COMPUTE_WH",
+        database="OPEN_SOURCE_DB",
+        schema="BRONZE_RAW",
+        role="DE_ETL_ROLE"
     )
-
-    for sql_file in SQL_FILES:
-        print(f"--- Executing {sql_file} ---")
-        if os.path.exists(sql_file):
-            with open(sql_file, "r") as f:
-                sql_content = f.read()
-
-                # Inject dynamic Azure storage details into 02_azure_integration.sql
-                if "02_azure_integration.sql" in sql_file:
-                    sql_content = sql_content.replace("<STORAGE_ACCOUNT_NAME>", AZURE_STORAGE_ACCOUNT)
-                    # Clean SAS token if it has a leading '?'
-                    clean_sas = AZURE_SAS_TOKEN.lstrip("?") if AZURE_SAS_TOKEN else ""
-                    sql_content = sql_content.replace("<AZURE_SAS_TOKEN>", clean_sas)
-
-                for cur in conn.execute_string(sql_content):
-                    print(f"Executed statement: {cur.query[:60]}...")
-        else:
-            print(f"File not found: {sql_file}")
-
+    cursor = conn.cursor()
+    
+    copy_query = f"""
+    COPY INTO OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES(RAW_PAYLOAD, FILE_NAME)
+    FROM (
+        SELECT $1, METADATA$FILENAME
+        FROM @OPEN_SOURCE_DB.BRONZE_RAW.STG_AZURE_RAW_BLOB/{blob_name}
+    )
+    FILE_FORMAT = (FORMAT_NAME = 'OPEN_SOURCE_DB.BRONZE_RAW.FF_JSON')
+    ON_ERROR = 'CONTINUE';
+    """
+    
+    cursor.execute(copy_query)
+    print("Successfully loaded raw JSON data into OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES.")
     conn.close()
-    print("All Snowflake SQL scripts executed successfully!")
 
 if __name__ == "__main__":
-    run_sql_scripts()
+    raw_data = fetch_open_source_data()
+    uploaded_blob = upload_to_azure_blob(raw_data)
+    copy_into_snowflake(uploaded_blob)
