@@ -35,6 +35,11 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          SNOWFLAKE_ORGANIZATION_NAME: "TICRBPW"
+          SNOWFLAKE_ACCOUNT_NAME: "FO21753"
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: "ACCOUNTADMIN"
         run: |
           terraform init
           terraform apply -auto-approve \
@@ -42,9 +47,17 @@ jobs:
             -var="azure_client_id=${{ secrets.AZURE_CLIENT_ID }}" \
             -var="azure_client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
             -var="azure_tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -var="snowflake_account=${{ secrets.SNOWFLAKE_ACCOUNT }}" \
+            -var="snowflake_account=TICRBPW-FO21753" \
             -var="snowflake_user=${{ secrets.SNOWFLAKE_USER }}" \
             -var="snowflake_password=${{ secrets.SNOWFLAKE_PASSWORD }}"
+
+      - name: Execute Snowflake DB Setup Scripts
+        env:
+          SNOWFLAKE_ACCOUNT: "TICRBPW-FO21753"
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+        run: |
+          python scripts/run_snowflake_setup.py
 
       - name: Get Azure Connection String
         id: azure_keys
@@ -63,7 +76,7 @@ jobs:
       - name: Execute Data Ingestion & Snowflake Load
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ env.AZURE_CONN_STR }}
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_ACCOUNT: "TICRBPW-FO21753"
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
