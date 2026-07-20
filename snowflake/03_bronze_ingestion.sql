@@ -1,13 +1,28 @@
 -- =====================================================================
--- 03. BRONZE LAYER: RAW TABLE CREATION
+-- 03. BRONZE LAYER: RAW TABLE & EXTERNAL TABLE CREATION
 -- =====================================================================
 USE ROLE DE_ETL_ROLE;
+USE WAREHOUSE DE_COMPUTE_WH;
 USE DATABASE OPEN_SOURCE_DB;
 USE SCHEMA BRONZE_RAW;
 
--- Internal Raw Ingestion Table
+-- 1. Internal Raw Table (for loaded data)
 CREATE TABLE IF NOT EXISTS RAW_BREWERIES (
     RAW_PAYLOAD VARIANT,
     FILE_NAME STRING,
     INGESTION_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
+
+-- 2. External Table (Querying Azure Blob Storage JSON files directly)
+CREATE OR REPLACE EXTERNAL TABLE EXT_RAW_BREWERIES (
+    BREWERY_ID STRING AS (VALUE:id::STRING),
+    BREWERY_NAME STRING AS (VALUE:name::STRING),
+    BREWERY_TYPE STRING AS (VALUE:brewery_type::STRING),
+    CITY STRING AS (VALUE:city::STRING),
+    STATE STRING AS (VALUE:state_province::STRING),
+    COUNTRY STRING AS (VALUE:country::STRING),
+    PAYLOAD VARIANT AS VALUE
+)
+WITH LOCATION = @STG_AZURE_RAW_BLOB
+AUTO_REFRESH = FALSE
+FILE_FORMAT = (TYPE = 'JSON');
