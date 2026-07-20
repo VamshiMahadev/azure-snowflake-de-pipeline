@@ -5,7 +5,7 @@ from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 import snowflake.connector
 
-# Environment Secrets
+# Environment Variables
 AZURE_CONN_STR = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 CONTAINER_NAME = "raw-data"
 
@@ -34,28 +34,30 @@ def upload_to_azure_blob(data):
     return blob_name
 
 def copy_into_snowflake(blob_name):
-    """Run COPY INTO command in Snowflake from Azure Stage"""
+    """Run COPY INTO command in Snowflake Bronze schema from Azure Stage"""
+    print("Connecting to Snowflake for COPY INTO execution...")
     conn = snowflake.connector.connect(
         user=SNOWFLAKE_USER,
         password=SNOWFLAKE_PASSWORD,
         account=SNOWFLAKE_ACCOUNT,
-        warehouse="COMPUTE_WH_DE",
+        warehouse="DE_COMPUTE_WH",
         database="OPEN_SOURCE_DB",
-        schema="INGESTION"
+        schema="BRONZE_RAW",
+        role="DE_ETL_ROLE"
     )
     cursor = conn.cursor()
     
     copy_query = f"""
-    COPY INTO OPEN_SOURCE_DB.INGESTION.RAW_BREWERIES(SRC_DATA, LOADED_AT)
+    COPY INTO OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES(RAW_PAYLOAD, FILE_NAME)
     FROM (
-        SELECT $1, CURRENT_TIMESTAMP()
-        FROM @AZURE_BLOB_STAGE/{blob_name}
+        SELECT $1, METADATA$FILENAME
+        FROM @OPEN_SOURCE_DB.BRONZE_RAW.STG_AZURE_RAW_BLOB/{blob_name}
     )
     FILE_FORMAT = (TYPE = 'JSON');
     """
     
     cursor.execute(copy_query)
-    print("Successfully copied data from Azure Stage to Snowflake RAW_BREWERIES table.")
+    print("Successfully loaded raw JSON data into OPEN_SOURCE_DB.BRONZE_RAW.RAW_BREWERIES.")
     conn.close()
 
 if __name__ == "__main__":
