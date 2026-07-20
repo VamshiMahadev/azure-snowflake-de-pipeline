@@ -22,6 +22,9 @@ def fetch_open_source_data():
 
 def upload_to_azure_blob(data):
     """Upload raw JSON payload to Azure Blob Storage"""
+    if not AZURE_CONN_STR:
+        raise ValueError("AZURE_STORAGE_CONNECTION_STRING environment variable is missing or empty.")
+
     timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H%M%S")
     blob_name = f"breweries/load_date={timestamp}/data.json"
     
@@ -53,7 +56,8 @@ def copy_into_snowflake(blob_name):
         SELECT $1, METADATA$FILENAME
         FROM @OPEN_SOURCE_DB.BRONZE_RAW.STG_AZURE_RAW_BLOB/{blob_name}
     )
-    FILE_FORMAT = (TYPE = 'JSON');
+    FILE_FORMAT = (FORMAT_NAME = 'OPEN_SOURCE_DB.BRONZE_RAW.FF_JSON')
+    ON_ERROR = 'CONTINUE';
     """
     
     cursor.execute(copy_query)
