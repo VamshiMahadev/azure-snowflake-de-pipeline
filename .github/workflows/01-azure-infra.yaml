@@ -2,11 +2,11 @@ name: "01 - Azure Infrastructure Pipeline"
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'terraform/**'
-    branches:
-      - main
+  #push:
+  #  paths:
+  #    - 'terraform/**'
+  #  branches:
+  #    - main
 
 jobs:
   build_azure_infra:
