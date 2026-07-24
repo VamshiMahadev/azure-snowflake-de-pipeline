@@ -2,6 +2,23 @@
 
 An automated end-to-end cloud data pipeline built using **Terraform (Infrastructure as Code)**, **Azure Blob Storage**, **Snowflake Data Warehouse**, **Python**, and **GitHub Actions**.
 
+## Highlights
+
+- Infrastructure as Code
+- Azure + Snowflake Integration
+- CDC Automation
+- GitHub Actions CI/CD
+- Medallion Architecture
+- Enterprise Healthcare Use-case Simulation
+
+## Future Enhancements
+
+- Delta Loads
+- Data Quality Framework
+- SCD Type 2 Implementation
+- Data Observability
+- Unit Testing
+- Monitoring & Alerting
 ---
 
 ## 🏥 Domain & Healthcare Relevance: Quality & Global Complaints Engineering
